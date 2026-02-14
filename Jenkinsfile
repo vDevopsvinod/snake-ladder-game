@@ -1,9 +1,14 @@
 pipeline {
-    agent any
+    agent {
+        node {
+            label 'built-in'
+        }
+    }
 
     environment {
         IMAGE_NAME = "snake-ladder-game"
         IMAGE_TAG = "${BUILD_ID}"
+        SONAR_SCANNER_OPTS = "-Dsonar.projectKey=snake-ladder-game -Dsonar.sources=src -Dsonar.tests=tests -Dsonar.host.url=http://192.168.1.12:9000"
     }
 
     stages {
@@ -11,6 +16,33 @@ pipeline {
             steps {
                 checkout scm
                 echo "✅ Checked out commit: ${GIT_COMMIT}"
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                script {
+                    // Run SonarQube analysis
+                    withSonarQubeEnv('SonarQube-Server') {
+                        sh 'sonar-scanner ${SONAR_SCANNER_OPTS}'
+                    }
+                }
+                echo "✅ SonarQube analysis completed"
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    // Wait for SonarQube quality gate result
+                    timeout(time: 10, unit: 'MINUTES') {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            error "❌ SonarQube Quality Gate FAILED: ${qg.status}"
+                        }
+                    }
+                }
+                echo "✅ Quality Gate PASSED"
             }
         }
 
@@ -50,7 +82,7 @@ pipeline {
             """
         }
         success {
-            echo "🎉 Build #${BUILD_NUMBER} succeeded!"
+            echo "🎉 Build #${BUILD_NUMBER} succeeded with quality gate PASSED!"
         }
         failure {
             echo "❌ Build #${BUILD_NUMBER} failed!"
