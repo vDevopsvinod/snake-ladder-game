@@ -5,10 +5,13 @@ pipeline {
         }
     }
 
+    tools {
+        sonarScanner 'SonarScanner-4.8'  // MUST match Global Tool Configuration name
+    }
+
     environment {
         IMAGE_NAME = "snake-ladder-game"
         IMAGE_TAG = "${BUILD_ID}"
-        SONAR_SCANNER_OPTS = "-Dsonar.projectKey=snake-ladder-game -Dsonar.sources=src -Dsonar.tests=tests -Dsonar.host.url=http://192.168.1.12:9000"
     }
 
     stages {
@@ -22,9 +25,8 @@ pipeline {
         stage('SonarQube Scan') {
             steps {
                 script {
-                    // Run SonarQube analysis
                     withSonarQubeEnv('SonarQube-Server') {
-                        sh 'sonar-scanner ${SONAR_SCANNER_OPTS}'
+                        sh 'sonar-scanner -Dsonar.projectKey=snake-ladder-game -Dsonar.sources=src -Dsonar.tests=tests'
                     }
                 }
                 echo "✅ SonarQube analysis completed"
@@ -34,11 +36,10 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
-                    // Wait for SonarQube quality gate result
                     timeout(time: 10, unit: 'MINUTES') {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
-                            error "❌ SonarQube Quality Gate FAILED: ${qg.status}"
+                            error "❌ Quality Gate FAILED: ${qg.status}"
                         }
                     }
                 }
