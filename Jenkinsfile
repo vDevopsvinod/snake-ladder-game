@@ -1,17 +1,10 @@
 pipeline {
-    agent {
-        node {
-            label 'built-in'
-        }
-    }
-
-    tools {
-        sonarScanner 'SonarScanner-4.8'  // MUST match Global Tool Configuration name
-    }
+    agent { label 'built-in' }
 
     environment {
         IMAGE_NAME = "snake-ladder-game"
         IMAGE_TAG = "${BUILD_ID}"
+        SONARQUBE_SERVER_URL = "http://192.168.1.12:9000"
     }
 
     stages {
@@ -25,9 +18,18 @@ pipeline {
         stage('SonarQube Scan') {
             steps {
                 script {
-                    withSonarQubeEnv('SonarQube-Server') {
-                        sh 'sonar-scanner -Dsonar.projectKey=snake-ladder-game -Dsonar.sources=src -Dsonar.tests=tests'
-                    }
+                    // Run SonarScanner INSIDE DOCKER CONTAINER (no host install needed)
+                    sh """
+                        docker run --rm \\
+                          -e SONAR_HOST_URL='${SONARQUBE_SERVER_URL}' \\
+                          -e SONAR_TOKEN='${SONAR_TOKEN}' \\
+                          -v '${WORKSPACE}:/usr/src' \\
+                          sonarsource/sonar-scanner-cli:4.8 \\
+                          -Dsonar.projectKey=snake-ladder-game \\
+                          -Dsonar.sources=src \\
+                          -Dsonar.tests=tests \\
+                          -Dsonar.projectBaseDir=/usr/src
+                    """
                 }
                 echo "✅ SonarQube analysis completed"
             }
