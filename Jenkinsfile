@@ -4,7 +4,6 @@ pipeline {
     environment {
         IMAGE_NAME = "snake-ladder-game"
         IMAGE_TAG = "${BUILD_ID}"
-        SONARQUBE_SERVER_URL = "http://192.168.1.12:9000"
     }
 
     stages {
@@ -18,18 +17,20 @@ pipeline {
         stage('SonarQube Scan') {
             steps {
                 script {
-                    // Run SonarScanner INSIDE DOCKER CONTAINER (no host install needed)
-                    sh """
-                        docker run --rm \\
-                          -e SONAR_HOST_URL='${SONARQUBE_SERVER_URL}' \\
-                          -e SONAR_TOKEN='${SONAR_TOKEN}' \\
-                          -v '${WORKSPACE}:/usr/src' \\
-                          sonarsource/sonar-scanner-cli:4.8 \\
-                          -Dsonar.projectKey=snake-ladder-game \\
-                          -Dsonar.sources=src \\
-                          -Dsonar.tests=tests \\
-                          -Dsonar.projectBaseDir=/usr/src
-                    """
+                    // withSonarQubeEnv automatically sets SONAR_HOST_URL and SONAR_TOKEN
+                    withSonarQubeEnv('SonarQube-Server') {
+                        sh """
+                            docker run --rm \\
+                              -e SONAR_HOST_URL='${SONAR_HOST_URL}' \\
+                              -e SONAR_TOKEN='${SONAR_TOKEN}' \\
+                              -v '${WORKSPACE}:/usr/src' \\
+                              sonarsource/sonar-scanner-cli:4.8 \\
+                              -Dsonar.projectKey=snake-ladder-game \\
+                              -Dsonar.sources=src \\
+                              -Dsonar.tests=tests \\
+                              -Dsonar.projectBaseDir=/usr/src
+                        """
+                    }
                 }
                 echo "✅ SonarQube analysis completed"
             }
@@ -37,12 +38,10 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                script {
-                    timeout(time: 10, unit: 'MINUTES') {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            error "❌ Quality Gate FAILED: ${qg.status}"
-                        }
+                timeout(time: 10, unit: 'MINUTES') {
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        error "❌ Quality Gate FAILED: ${qg.status}"
                     }
                 }
                 echo "✅ Quality Gate PASSED"
